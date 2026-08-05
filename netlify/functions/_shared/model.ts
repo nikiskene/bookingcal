@@ -1,0 +1,12 @@
+export type DayKey = 'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday'|'sunday';
+export type TimeWindow={enabled:boolean;start:string;end:string};
+export type WeeklyAvailability=Record<DayKey,TimeWindow>;
+export type BookingQuestion={id:string;label:string;required:boolean;placeholder?:string};
+export type BookingTemplate={id:string;name:string;slug:string;headline:string;description:string;active:boolean;durations:number[];purposes:string[];meetingMethods:Array<'zoom'|'teams'>;questions:BookingQuestion[];freeTextEnabled:boolean;freeTextRequired:boolean;freeTextLabel:string;availabilityMode:'global'|'custom';customAvailability:WeeklyAvailability;minNoticeHours?:number|null;bufferBeforeMin?:number|null;bufferAfterMin?:number|null;horizonDays?:number|null};
+export type AppSettings={timezone:string;globalAvailability:WeeklyAvailability;minNoticeHours:number;bufferBeforeMin:number;bufferAfterMin:number;horizonDays:number;zoomUrl:string;teamsFallbackUrl:string};
+export type AppConfig={settings:AppSettings;templates:BookingTemplate[]};
+export type BookingAnswer={questionId:string;label:string;answer:string};
+
+export const defaultWeek=():WeeklyAvailability=>({monday:{enabled:true,start:'09:00',end:'18:00'},tuesday:{enabled:true,start:'09:00',end:'18:00'},wednesday:{enabled:true,start:'09:00',end:'18:00'},thursday:{enabled:true,start:'09:00',end:'18:00'},friday:{enabled:true,start:'09:00',end:'18:00'},saturday:{enabled:false,start:'09:00',end:'18:00'},sunday:{enabled:true,start:'16:00',end:'19:00'}});
+
+export const defaultConfig=():AppConfig=>({settings:{timezone:'Europe/Vienna',globalAvailability:defaultWeek(),minNoticeHours:4,bufferBeforeMin:0,bufferAfterMin:0,horizonDays:60,zoomUrl:process.env.ZOOM_URL||'https://www.nikiskene.com/meetonline',teamsFallbackUrl:process.env.TEAMS_FALLBACK_URL||'https://www.nikiskene.com/meetonteams'},templates:[{id:'default-niki',name:'Niki — general',slug:'niki',headline:'Book a meeting with Niki',description:'Choose a time that works for you. Times automatically appear in your timezone.',active:true,durations:[15,30,60],purposes:['Institute of Beautiful Success','Tour','Speakercoaching','Other'],meetingMethods:['zoom','teams'],questions:[],freeTextEnabled:true,freeTextRequired:false,freeTextLabel:'Anything I should know before we meet?',availabilityMode:'global',customAvailability:defaultWeek(),minNoticeHours:null,bufferBeforeMin:null,bufferAfterMin:null,horizonDays:null}]});
