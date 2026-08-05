@@ -9,7 +9,7 @@ function templateNumber(value:number|null|undefined,fallback:number){return valu
 function scheduleFor(template:BookingTemplate,config:AppConfig):WeeklyAvailability{return template.availabilityMode==='custom'?template.customAvailability:config.settings.globalAvailability}
 function dayKey(dt:DateTime):DayKey{return ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'][dt.weekday-1] as DayKey}
 function combine(date:DateTime,time:string,zone:string){const [hour,minute]=time.split(':').map(Number);return DateTime.fromObject({year:date.year,month:date.month,day:date.day,hour,minute},{zone})}
-function isBusy(status:string){return !['free'].includes(status.toLowerCase())}
+function isBusy(status:string){return status.toLowerCase()!=='free'}
 
 export async function getAvailableSlots(config:AppConfig,template:BookingTemplate,duration:number):Promise<Slot[]> {
   const zone=config.settings.timezone||'Europe/Vienna';
@@ -21,10 +21,19 @@ export async function getAvailableSlots(config:AppConfig,template:BookingTemplat
   const earliest=now.plus({hours:minNotice});
   const rangeStart=now.startOf('day');
   const rangeEnd=now.plus({days:horizon}).endOf('day');
-  const data=await graphFetch<{value:Array<{scheduleItems:ScheduleItem[]}>}>(`/users/${encodeURIComponent(calendarEmail())}/calendar/getSchedule`,{method:'POST',body:JSON.stringify({schedules:[calendarEmail()],startTime:{dateTime:rangeStart.toUTC().toISO({suppressMilliseconds:true}),timeZone:'UTC'},endTime:{dateTime:rangeEnd.toUTC().toISO({suppressMilliseconds:true}),timeZone:'UTC'},availabilityViewInterval:15})});
+  const data=await graphFetch<{value:Array<{scheduleItems:ScheduleItem[]}>}>(`/users/${encodeURIComponent(calendarEmail())}/calendar/getSchedule`,{
+    method:'POST',
+    headers:{Prefer:'outlook.timezone="UTC"'},
+    body:JSON.stringify({
+      schedules:[calendarEmail()],
+      startTime:{dateTime:rangeStart.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss"),timeZone:'UTC'},
+      endTime:{dateTime:rangeEnd.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss"),timeZone:'UTC'},
+      availabilityViewInterval:15
+    })
+  });
   const busy=(data.value?.[0]?.scheduleItems||[]).filter((x)=>isBusy(x.status)).map((x)=>{
-    const s=DateTime.fromISO(x.start.dateTime,{zone:x.start.timeZone||'UTC'}).toUTC();
-    const e=DateTime.fromISO(x.end.dateTime,{zone:x.end.timeZone||'UTC'}).toUTC();
+    const s=DateTime.fromISO(x.start.dateTime,{zone:'UTC'});
+    const e=DateTime.fromISO(x.end.dateTime,{zone:'UTC'});
     return Interval.fromDateTimes(s,e);
   });
   const schedule=scheduleFor(template,config);
