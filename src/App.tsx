@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AdminPage } from './pages/AdminPage';
 import { BookingPage } from './pages/BookingPage';
 
@@ -7,10 +8,19 @@ function bookingSlug(pathname: string) {
 }
 
 export function App() {
+  const initialAdmin = window.location.pathname.startsWith('/admin') || new URLSearchParams(window.location.search).get('admin') === '1';
+  const [showAdmin, setShowAdmin] = useState(initialAdmin);
   const path = window.location.pathname;
-  if (path.startsWith('/admin')) return <AdminPage />;
+
+  if (showAdmin) return <AdminPage />;
+
   const slug = bookingSlug(path) || (path === '/book' || path === '/book/' ? 'niki' : null);
   if (slug) return <BookingPage slug={slug} />;
+
+  const openAdmin = () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    setShowAdmin(true);
+  };
 
   return (
     <main className="landing-shell">
@@ -18,7 +28,7 @@ export function App() {
         <div className="eyebrow">BOOKINGCAL</div>
         <h1>Scheduling, without the scheduling.</h1>
         <p>Use a booking link to choose a time in your own timezone.</p>
-        <a className="admin-login-link" href="/admin">Admin login</a>
+        <button className="admin-login-link" type="button" onClick={openAdmin}>Admin login</button>
       </section>
     </main>
   );
