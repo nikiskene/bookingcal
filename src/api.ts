@@ -1,8 +1,8 @@
+import { getAccessToken } from './auth';
 import type { AppConfig, PublicConfig, Slot } from './types';
 
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
-    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
     ...options,
   });
@@ -11,14 +11,18 @@ async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
+async function adminRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+  return jsonRequest<T>(url, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, ...(options?.headers || {}) },
+  });
+}
+
 export const api = {
-  login: (password: string) => jsonRequest<{ ok: true }>('/api/admin/login', {
-    method: 'POST',
-    body: JSON.stringify({ password }),
-  }),
-  logout: () => jsonRequest<{ ok: true }>('/api/admin/logout', { method: 'POST' }),
-  getAdminConfig: () => jsonRequest<AppConfig>('/api/admin/config'),
-  saveAdminConfig: (config: AppConfig) => jsonRequest<AppConfig>('/api/admin/config', {
+  getAdminConfig: () => adminRequest<AppConfig>('/api/admin/config'),
+  saveAdminConfig: (config: AppConfig) => adminRequest<AppConfig>('/api/admin/config', {
     method: 'PUT',
     body: JSON.stringify(config),
   }),
