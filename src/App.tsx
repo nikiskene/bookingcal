@@ -18,6 +18,7 @@ export function App() {
         <div className="eyebrow">BOOKINGCAL</div>
         <h1>Scheduling, without the scheduling.</h1>
         <p>Use a booking link to choose a time in your own timezone.</p>
+        <a className="admin-login-link" href="/admin">Admin login</a>
       </section>
     </main>
   );
