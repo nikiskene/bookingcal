@@ -2,13 +2,15 @@ import { defaultConfig, type AppConfig } from './model';
 
 const ROW_ID = 'main';
 
+type RuntimeDb = { url?: string; anonKey?: string };
+
 function env(name: string) {
   return process.env[name] || '';
 }
 
-export async function loadConfig(): Promise<AppConfig> {
-  const url = env('VITE_SUPABASE_URL');
-  const anonKey = env('VITE_SUPABASE_ANON_KEY');
+export async function loadConfig(runtime: RuntimeDb = {}): Promise<AppConfig> {
+  const url = runtime.url || env('SUPABASE_URL') || env('VITE_SUPABASE_URL');
+  const anonKey = runtime.anonKey || env('SUPABASE_ANON_KEY') || env('VITE_SUPABASE_ANON_KEY');
   if (!url || !anonKey) return defaultConfig();
 
   try {
