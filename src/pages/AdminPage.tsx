@@ -1,17 +1,32 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api';
+import { getCurrentUser, signIn, signOut } from '../auth';
 import { newTemplate } from '../defaults';
 import type { AppConfig, BookingTemplate } from '../types';
 import { WeeklyEditor } from '../components/WeeklyEditor';
 
 function Login({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
   async function submit(e: FormEvent) {
     e.preventDefault();
-    try { await api.login(password); onDone(); } catch (e) { setError(e instanceof Error ? e.message : 'Login failed'); }
+    setBusy(true);
+    setError('');
+    try {
+      await signIn(email.trim(), password);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Login failed');
+    } finally {
+      setBusy(false);
+    }
   }
-  return <main className="admin-shell"><section className="login-card"><div className="eyebrow">BOOKINGCAL ADMIN</div><h1>Sign in</h1><form onSubmit={submit}><input autoFocus type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} />{error && <div className="error-box">{error}</div>}<button className="primary-button">Sign in</button></form></section></main>;
+
+  return <main className="admin-shell login-shell"><section className="login-card"><div className="eyebrow">BOOKINGCAL ADMIN</div><h1>Sign in</h1><p className="muted">Private calendar administration.</p><form onSubmit={submit}><input autoFocus type="email" autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required /><input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />{error && <div className="error-box">{error}</div>}<button className="primary-button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button></form></section></main>;
 }
 
 function TemplateEditor({ template, onChange, onDelete, onDuplicate }: { template: BookingTemplate; onChange: (t: BookingTemplate) => void; onDelete: () => void; onDuplicate: () => void }) {
@@ -39,14 +54,29 @@ function TemplateEditor({ template, onChange, onDelete, onDuplicate }: { templat
 
 export function AdminPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [needsLogin, setNeedsLogin] = useState(false);
+  const [authState, setAuthState] = useState<'checking'|'signed-out'|'signed-in'>('checking');
   const [selected, setSelected] = useState<string>('');
   const [status, setStatus] = useState('');
 
-  const load = () => api.getAdminConfig().then((c) => { setConfig(c); setNeedsLogin(false); if (!selected) setSelected(c.templates[0]?.id || ''); }).catch(() => setNeedsLogin(true));
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    try {
+      const c = await api.getAdminConfig();
+      setConfig(c);
+      setAuthState('signed-in');
+      setSelected((value) => value || c.templates[0]?.id || '');
+    } catch {
+      setConfig(null);
+      setAuthState('signed-out');
+    }
+  };
+
+  useEffect(() => {
+    getCurrentUser().then((user) => user ? load() : setAuthState('signed-out')).catch(() => setAuthState('signed-out'));
+  }, []);
+
   const current = useMemo(() => config?.templates.find((t) => t.id === selected) || null, [config, selected]);
-  if (needsLogin) return <Login onDone={load} />;
+  if (authState === 'checking') return <main className="admin-shell"><div className="admin-loading">Loading…</div></main>;
+  if (authState === 'signed-out') return <Login onDone={load} />;
   if (!config) return <main className="admin-shell"><div className="admin-loading">Loading…</div></main>;
 
   const save = async () => { setStatus('Saving…'); try { const saved=await api.saveAdminConfig(config); setConfig(saved); setStatus('Saved'); setTimeout(()=>setStatus(''),1500); } catch(e){ setStatus(e instanceof Error?e.message:'Save failed'); } };
@@ -55,9 +85,10 @@ export function AdminPage() {
   const duplicate=()=>{if(!current)return;const t={...current,id:crypto.randomUUID(),name:`${current.name} copy`,slug:`${current.slug}-copy`,questions:current.questions.map(q=>({...q,id:crypto.randomUUID()}))};setConfig({...config,templates:[...config.templates,t]});setSelected(t.id)};
   const remove=()=>{if(!current||!confirm('Delete this booking link?'))return;const templates=config.templates.filter(t=>t.id!==current.id);setConfig({...config,templates});setSelected(templates[0]?.id||'')};
   const detectTimezone=()=>setConfig({...config,settings:{...config.settings,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||config.settings.timezone}});
+  const logout = async () => { await signOut(); setConfig(null); setAuthState('signed-out'); };
 
   return <main className="admin-shell">
-    <aside className="admin-sidebar"><div><div className="eyebrow">BOOKINGCAL</div><h2>Admin</h2></div><nav>{config.templates.map((t)=><button key={t.id} className={selected===t.id?'nav-link active':'nav-link'} onClick={()=>setSelected(t.id)}><span>{t.name}</span><small>/{t.slug}</small></button>)}</nav><button className="secondary-button full" onClick={add}>+ New booking link</button></aside>
+    <aside className="admin-sidebar"><div><div className="eyebrow">BOOKINGCAL</div><h2>Admin</h2></div><nav>{config.templates.map((t)=><button key={t.id} className={selected===t.id?'nav-link active':'nav-link'} onClick={()=>setSelected(t.id)}><span>{t.name}</span><small>/{t.slug}</small></button>)}</nav><button className="secondary-button full" onClick={add}>+ New booking link</button><button className="nav-link logout-button" onClick={logout}>Sign out</button></aside>
     <section className="admin-main"><header className="admin-top"><div><h1>Calendar manager</h1><p>Microsoft 365 is the source of truth. Booking data is not stored here.</p></div><div className="save-area"><span>{status}</span><button className="primary-button compact" onClick={save}>Save changes</button></div></header>
       <section className="settings-card"><div className="editor-head"><div><div className="eyebrow">GLOBAL SETTINGS</div><h2>Availability</h2></div></div><div className="timezone-control"><div className="field-group"><label>Your current timezone</label><input value={config.settings.timezone} onChange={(e)=>setConfig({...config,settings:{...config.settings,timezone:e.target.value}})} /></div><button className="secondary-button" onClick={detectTimezone}>Use this device timezone</button></div><WeeklyEditor value={config.settings.globalAvailability} onChange={(globalAvailability)=>setConfig({...config,settings:{...config.settings,globalAvailability}})} /><div className="form-grid four-col"><div className="field-group"><label>Minimum notice (hours)</label><input type="number" min="0" value={config.settings.minNoticeHours} onChange={(e)=>setConfig({...config,settings:{...config.settings,minNoticeHours:Number(e.target.value)}})}/></div><div className="field-group"><label>Buffer before (min)</label><input type="number" min="0" value={config.settings.bufferBeforeMin} onChange={(e)=>setConfig({...config,settings:{...config.settings,bufferBeforeMin:Number(e.target.value)}})}/></div><div className="field-group"><label>Buffer after (min)</label><input type="number" min="0" value={config.settings.bufferAfterMin} onChange={(e)=>setConfig({...config,settings:{...config.settings,bufferAfterMin:Number(e.target.value)}})}/></div><div className="field-group"><label>Booking horizon (days)</label><input type="number" min="1" max="60" value={config.settings.horizonDays} onChange={(e)=>setConfig({...config,settings:{...config.settings,horizonDays:Number(e.target.value)}})}/></div></div></section>
       {current ? <TemplateEditor template={current} onChange={updateTemplate} onDelete={remove} onDuplicate={duplicate} /> : <section className="editor-card"><h2>Create your first booking link.</h2><button className="primary-button compact" onClick={add}>Create link</button></section>}
