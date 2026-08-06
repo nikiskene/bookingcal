@@ -12,11 +12,11 @@ Focused personal scheduling tool for Niki Skene. Microsoft 365 remains the calen
 - Per-link purpose options, meeting methods, questions, free-text field and custom availability
 - Zoom via `https://www.nikiskene.com/meetonline`
 - Microsoft Teams online meetings generated through Microsoft Graph, with fallback link support
-- Microsoft 365 calendar event creation in `ns@iacy.com`
-- Confirmation email to the guest with `crm@iacy.com` BCC'd
+- Microsoft 365 calendar event creation
+- Confirmation email to the guest with CRM BCC support
 - Friendly reminder emails approximately 24 hours and 1 hour before the meeting
-- Admin at `/admin` with simple password/session auth
-- Booking-link configuration persisted in Netlify Blobs; no Supabase/database required
+- Admin at `/admin` with Bolt Database authentication
+- Booking-link configuration persisted in Bolt Database
 
 ## Required Microsoft Graph permissions
 
@@ -25,20 +25,18 @@ Application permissions with admin consent:
 - `Calendars.ReadWrite`
 - `Mail.Send`
 
-The Entra app already created for this project is `Niki Calendar Engine`.
-
 ## Environment variables
 
-Set these in the Netlify/Bolt deployment environment. Never commit the client secret.
+Set these in the deployment environment. Never commit the real credential values.
 
 ```text
-MS_TENANT_ID=4f4f1ed3-ce5b-4010-8791-4d2b0209dbec
-MS_CLIENT_ID=7fc43a3a-9172-4a5f-ba82-9f269ceb488f
+MS_TENANT_ID=<Microsoft tenant ID>
+MS_CLIENT_ID=<Microsoft application/client ID>
 MS_CLIENT_SECRET=<Microsoft client secret VALUE>
-MS_CALENDAR_EMAIL=ns@iacy.com
-CRM_BCC_EMAIL=crm@iacy.com
-ADMIN_PASSWORD=<choose a strong admin password>
-ADMIN_SESSION_SECRET=<long random string>
+MS_CALENDAR_EMAIL=<calendar mailbox>
+CRM_BCC_EMAIL=<CRM BCC mailbox>
+VITE_SUPABASE_URL=<provided by Bolt Database>
+VITE_SUPABASE_ANON_KEY=<provided by Bolt Database>
 ZOOM_URL=https://www.nikiskene.com/meetonline
 TEAMS_FALLBACK_URL=https://www.nikiskene.com/meetonteams
 ```
@@ -50,7 +48,7 @@ npm install
 npm run dev
 ```
 
-For the API functions and Netlify Blobs, use a Netlify-enabled environment/deployment. Production build:
+Production build:
 
 ```bash
 npm run build
@@ -58,12 +56,12 @@ npm run build
 
 ## Deployment
 
-The repository includes `netlify.toml`. Connect this GitHub repository to Netlify (or let Bolt deploy it to Netlify), add the environment variables above, and deploy. The scheduled reminder function runs every 15 minutes on production deployments.
+The repository includes `netlify.toml`. Connect this GitHub repository to Netlify, add the environment variables above, and deploy. The scheduled reminder function runs on production deployments.
 
 ## Admin workflow
 
-1. Open `/admin` and sign in with `ADMIN_PASSWORD`.
-2. Use **Use this device timezone** whenever travelling to reset Niki's host timezone to the device timezone.
+1. Open `/admin` and sign in.
+2. Use **Set timezone to this device** whenever travelling to reset the host timezone.
 3. Edit global availability or create/duplicate booking links.
 4. Each link provides a copyable public URL and iframe embed code.
 5. Save changes.
