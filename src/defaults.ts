@@ -1,4 +1,4 @@
-import type { BookingTemplate, WeeklyAvailability } from './types';
+import type { AppConfig, BookingTemplate, WeeklyAvailability } from './types';
 
 export const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const;
 
@@ -32,4 +32,25 @@ export const newTemplate = (): BookingTemplate => ({
   bufferBeforeMin: null,
   bufferAfterMin: null,
   horizonDays: null,
+});
+
+export const defaultConfig = (): AppConfig => ({
+  settings: {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Vienna',
+    globalAvailability: blankWeek(),
+    minNoticeHours: 4,
+    bufferBeforeMin: 0,
+    bufferAfterMin: 0,
+    horizonDays: 60,
+    zoomUrl: 'https://www.nikiskene.com/meetonline',
+    teamsFallbackUrl: 'https://www.nikiskene.com/meetonteams',
+  },
+  templates: [{
+    ...newTemplate(),
+    id: 'default-niki',
+    name: 'Niki — general',
+    slug: 'niki',
+    headline: 'Book a meeting with Niki',
+    description: 'Choose a time that works for you. Times automatically appear in your timezone.',
+  }],
 });
