@@ -6,7 +6,11 @@ async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
     ...options,
   });
-  const data = await response.json().catch(() => ({}));
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(`API unavailable (${response.status})`);
+  }
+  const data = await response.json();
   if (!response.ok) throw new Error(data?.error || `Request failed (${response.status})`);
   return data as T;
 }
@@ -21,7 +25,13 @@ async function adminRequest<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getAdminConfig: () => adminRequest<AppConfig>('/api/admin/config'),
+  getAdminConfig: async () => {
+    const config = await adminRequest<AppConfig>('/api/admin/config');
+    if (!config || !config.settings || !Array.isArray(config.templates)) {
+      throw new Error('Invalid admin configuration returned by server');
+    }
+    return config;
+  },
   saveAdminConfig: (config: AppConfig) => adminRequest<AppConfig>('/api/admin/config', {
     method: 'PUT',
     body: JSON.stringify(config),
