@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { AdminPage } from './pages/AdminPage';
 import { BookingPage } from './pages/BookingPage';
+import { ManagePage } from './pages/ManagePage';
 
 function bookingSlug(pathname: string) {
   const match = pathname.match(/^\/book\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function manageToken(pathname: string) {
+  const match = pathname.match(/^\/manage\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -13,6 +19,9 @@ export function App() {
   const path = window.location.pathname;
 
   if (showAdmin) return <AdminPage />;
+
+  const token = manageToken(path);
+  if (token) return <ManagePage token={token} />;
 
   const slug = bookingSlug(path) || (path === '/book' || path === '/book/' ? 'niki' : null);
   if (slug) return <BookingPage slug={slug} />;
