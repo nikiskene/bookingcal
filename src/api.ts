@@ -1,9 +1,18 @@
 import { loadAdminConfig, loadPublicConfig, saveAdminConfig } from './configStore';
 import type { AppConfig, PublicConfig, Slot } from './types';
 
+const publicBackendHeaders = {
+  'x-bookingcal-db-url': import.meta.env.VITE_SUPABASE_URL || '',
+  'x-bookingcal-db-key': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+};
+
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...publicBackendHeaders,
+      ...(options?.headers || {}),
+    },
     ...options,
   });
   const contentType = response.headers.get('content-type') || '';
