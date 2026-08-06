@@ -1,7 +1,7 @@
 {
   "name": "bookingcal",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@netlify/blobs": "^9.1.0",
+    "@supabase/supabase-js": "^2.57.4",
     "luxon": "^3.7.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
