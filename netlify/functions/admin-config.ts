@@ -15,7 +15,7 @@ function valid(config: AppConfig) {
 }
 
 export const handler: Handler = async (event) => {
-  if (!isAdmin(event)) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+  if (!(await isAdmin(event))) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
   if (event.httpMethod === 'GET') return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(await loadConfig()) };
   if (event.httpMethod === 'PUT') {
     const config = JSON.parse(event.body || '{}') as AppConfig;
