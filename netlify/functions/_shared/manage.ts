@@ -2,6 +2,8 @@ import { DateTime } from 'luxon';
 import { calendarEmail, graphFetch } from './graph';
 
 const META=/BOOKINGCAL_META:([A-Za-z0-9_-]+)/;
+const TOKEN_PREFIX='BookingCalToken:';
+const SLUG_PREFIX='BookingCalSlug:';
 
 export type BookingMeta={
   customerName:string;
@@ -28,17 +30,49 @@ export function parseBookingMeta(html:string):BookingMeta|null{
   }catch{return null}
 }
 
+function fallbackMeta(event:any, token:string):BookingMeta|null{
+  const categories=Array.isArray(event.categories)?event.categories:[];
+  const slug=String(categories.find((c:string)=>c.startsWith(SLUG_PREFIX))||'').slice(SLUG_PREFIX.length)||'niki';
+  const attendee=Array.isArray(event.attendees)?event.attendees[0]?.emailAddress:null;
+  const start=DateTime.fromISO(event.start?.dateTime||'',{zone:event.start?.timeZone||'UTC'}).toUTC();
+  const end=DateTime.fromISO(event.end?.dateTime||'',{zone:event.end?.timeZone||'UTC'}).toUTC();
+  if(!attendee?.address||!start.isValid||!end.isValid)return null;
+  const subject=String(event.subject||'');
+  const dash=subject.indexOf(' — ');
+  const purpose=dash>=0?subject.slice(0,dash):subject||'Meeting';
+  const name=attendee.name||(dash>=0?subject.slice(dash+3):'Guest');
+  const meetingMethod:eventualMeetingMethod = event.onlineMeeting?.joinUrl?'teams':'zoom';
+  return {
+    customerName:name,
+    customerEmail:attendee.address,
+    viewerTimezone:'UTC',
+    meetingMethod,
+    purpose,
+    templateSlug:slug,
+    manageToken:token,
+    duration:Math.max(1,Math.round(end.diff(start,'minutes').minutes)),
+  };
+}
+
+type eventualMeetingMethod='zoom'|'teams';
+
 export async function findManagedEvent(token:string){
-  if(!token||token.length<20) return null;
+  if(!token||token.length<20)return null;
   const from=DateTime.utc().minus({days:2});
   const to=DateTime.utc().plus({days:120});
-  let url=`/users/${encodeURIComponent(calendarEmail())}/calendarView?${new URLSearchParams({startDateTime:from.toISO()!,endDateTime:to.toISO()!,'$select':'id,subject,start,end,categories,body,onlineMeeting,isCancelled'}).toString()}`;
+  let url=`/users/${encodeURIComponent(calendarEmail())}/calendarView?${new URLSearchParams({startDateTime:from.toISO()!,endDateTime:to.toISO()!,'$select':'id,subject,start,end,categories,body,onlineMeeting,isCancelled,attendees'}).toString()}`;
   for(let page=0;page<8&&url;page++){
     const data=await graphFetch<{value:any[];'@odata.nextLink'?:string}>(url,{headers:{Prefer:'outlook.timezone="UTC"'}});
     for(const event of data.value||[]){
-      if(!Array.isArray(event.categories)||!event.categories.includes('BookingCal'))continue;
-      const meta=parseBookingMeta(event.body?.content||'');
-      if(meta?.manageToken===token)return {event,meta};
+      const categories=Array.isArray(event.categories)?event.categories:[];
+      if(!categories.includes('BookingCal'))continue;
+      const categoryToken=String(categories.find((c:string)=>c.startsWith(TOKEN_PREFIX))||'').slice(TOKEN_PREFIX.length);
+      const parsed=parseBookingMeta(event.body?.content||'');
+      if(parsed?.manageToken===token)return {event,meta:parsed};
+      if(categoryToken===token){
+        const meta=parsed||fallbackMeta(event,token);
+        if(meta)return {event,meta};
+      }
     }
     const next=data['@odata.nextLink'];
     url=next?next.replace('https://graph.microsoft.com/v1.0',''):'';
