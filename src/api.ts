@@ -1,9 +1,21 @@
 import { loadAdminConfig, loadPublicConfig, saveAdminConfig } from './configStore';
 import type { AppConfig, PublicConfig, Slot } from './types';
 
+function runtimeDbHeaders() {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  return url && anonKey
+    ? { 'x-bookingcal-db-url': url, 'x-bookingcal-db-key': anonKey }
+    : {};
+}
+
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...runtimeDbHeaders(),
+      ...(options?.headers || {}),
+    },
     ...options,
   });
   const contentType = response.headers.get('content-type') || '';
