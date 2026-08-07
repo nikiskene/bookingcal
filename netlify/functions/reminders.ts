@@ -1,12 +1,10 @@
 import { DateTime } from 'luxon';
 import { calendarEmail, graphFetch, sendMail } from './_shared/graph';
 import { loadConfig } from './_shared/storage';
+import { parseBookingMeta } from './_shared/manage';
 
-const META=/BOOKINGCAL_META:([A-Za-z0-9_-]+)/;
 const esc=(value:string)=>value.replace(/[&<>"']/g,(c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]!));
 
-type Meta={customerName:string;customerEmail:string;viewerTimezone:string;meetingMethod:'zoom'|'teams';purpose:string;templateSlug:string;manageToken?:string;duration?:number};
-function parseMeta(html:string):Meta|null{try{const match=html.match(META);if(!match)return null;return JSON.parse(Buffer.from(match[1],'base64url').toString('utf8')) as Meta}catch{return null}}
 function prettyDate(iso:string,timeZone:string){return new Intl.DateTimeFormat('en',{timeZone,weekday:'long',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(new Date(iso))}
 
 export default async () => {
@@ -18,7 +16,7 @@ export default async () => {
   const data=await graphFetch<{value:any[]}>(`/users/${encodeURIComponent(calendarEmail())}/calendarView?${query.toString()}`,{headers:{Prefer:'outlook.timezone="UTC"'}});
   for(const event of data.value||[]){
     if(event.isCancelled||!Array.isArray(event.categories)||!event.categories.includes('BookingCal'))continue;
-    const meta=parseMeta(event.body?.content||'');
+    const meta=parseBookingMeta(event.body?.content||'');
     if(!meta?.customerEmail)continue;
     const start=DateTime.fromISO(event.start?.dateTime,{zone:event.start?.timeZone||'UTC'}).toUTC();
     const minutes=start.diff(now,'minutes').minutes;
@@ -27,7 +25,7 @@ export default async () => {
       if(minutes<window.min||minutes>window.max||event.categories.includes(window.tag))continue;
       const meetingUrl=meta.meetingMethod==='zoom'?config.settings.zoomUrl:(event.onlineMeeting?.joinUrl||config.settings.teamsFallbackUrl);
       const when=prettyDate(start.toISO()!,meta.viewerTimezone||'UTC');
-      const manageUrl=meta.manageToken?`${(process.env.URL||'https://nikiskenecal.netlify.app').replace(/\/$/,'')}/manage/${meta.manageToken}`:'';
+      const manageUrl=meta.manageUrl||`${(process.env.URL||'https://nikiskenecal.netlify.app').replace(/\/$/,'')}/manage/${meta.manageToken}`;
       const manageHtml=manageUrl?`<p>Plans changed? <a href="${esc(manageUrl)}">Reschedule or cancel your meeting</a>.</p>`:'';
       const html=`<p>Hi ${esc(meta.customerName)},</p><p>A quick reminder: your meeting with Niki is ${window.label}.</p><p><strong>${esc(when)}</strong><br>${esc(meta.purpose)}</p><p><a href="${esc(meetingUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px">Join meeting</a></p>${manageHtml}<p>See you soon.</p>`;
       await sendMail(meta.customerEmail,'Reminder: your meeting with Niki',html);

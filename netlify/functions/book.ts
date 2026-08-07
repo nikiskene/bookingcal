@@ -5,11 +5,16 @@ import { getAvailableSlots } from './_shared/availability';
 import { calendarEmail, crmBccEmail, graphFetch, sendMail } from './_shared/graph';
 import { loadConfig } from './_shared/storage';
 import type { BookingAnswer } from './_shared/model';
+import { encodeBookingMeta, parseBookingMeta, type BookingMeta } from './_shared/manage';
 
 const esc=(value:string)=>value.replace(/[&<>"']/g,(c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]!));
-const metadata=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64url');
 function prettyDate(iso:string,timeZone:string){return new Intl.DateTimeFormat('en',{timeZone,weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(new Date(iso))}
-function siteUrl(event:any){return (process.env.URL||event.headers?.origin||'https://nikiskenecal.netlify.app').replace(/\/$/,'')}
+function siteUrl(event:any){
+  const candidate=process.env.URL||event.headers?.origin||'https://nikiskenecal.netlify.app';
+  const url=new URL(candidate);
+  if(url.protocol!=='https:'&&url.protocol!=='http:')throw new Error('BookingCal site URL is invalid');
+  return url.origin;
+}
 
 export const handler: Handler = async (event) => {
   if(event.httpMethod!=='POST') return {statusCode:405,headers:{'Content-Type':'application/json'},body:JSON.stringify({error:'Method not allowed'})};
@@ -51,14 +56,16 @@ export const handler: Handler = async (event) => {
     const teamsFallback=config.settings.teamsFallbackUrl||process.env.TEAMS_FALLBACK_URL||'https://www.nikiskene.com/meetonteams';
     const manageToken=randomUUID().replace(/-/g,'')+randomUUID().replace(/-/g,'');
     const manageUrl=`${siteUrl(event)}/manage/${manageToken}`;
-    const meta={customerName:name,customerEmail:email,viewerTimezone,meetingMethod,purpose,templateSlug:slug,manageToken,duration};
+    const meta:BookingMeta={customerName:name,customerEmail:email,viewerTimezone,meetingMethod:meetingMethod as 'zoom'|'teams',purpose,templateSlug:slug,manageToken,manageUrl,duration};
     const answerHtml=answers.filter((a)=>a.answer?.trim()).map((a)=>`<p><strong>${esc(a.label)}</strong><br>${esc(a.answer)}</p>`).join('');
     const methodText=meetingMethod==='zoom'?`<p><strong>Meeting link:</strong> <a href="${esc(zoomUrl)}">${esc(zoomUrl)}</a></p>`:'<p><strong>Meeting:</strong> Microsoft Teams. The Teams join link is included with this invitation.</p>';
-    const bodyHtml=`<p><strong>Booking via BookingCal</strong></p><p><strong>Guest:</strong> ${esc(name)} (${esc(email)})<br><strong>Purpose:</strong> ${esc(purpose)}<br><strong>Duration:</strong> ${duration} minutes</p>${methodText}${answerHtml}${message?`<p><strong>Message</strong><br>${esc(message)}</p>`:''}<p><strong>Manage booking:</strong> <a href="${esc(manageUrl)}">${esc(manageUrl)}</a></p><!--BOOKINGCAL_META:${metadata(meta)}-->`;
+    const bodyHtml=`<p><strong>Booking via BookingCal</strong></p><p><strong>Guest:</strong> ${esc(name)} (${esc(email)})<br><strong>Purpose:</strong> ${esc(purpose)}<br><strong>Duration:</strong> ${duration} minutes</p>${methodText}${answerHtml}${message?`<p><strong>Message</strong><br>${esc(message)}</p>`:''}<p><strong>Manage booking:</strong> <a href="${esc(manageUrl)}">${esc(manageUrl)}</a></p><!--BOOKINGCAL_META:${encodeBookingMeta(meta)}-->`;
     const eventPayload:any={subject:`${purpose} — ${name}`,body:{contentType:'HTML',content:bodyHtml},start:{dateTime:start.toISO({suppressMilliseconds:true}),timeZone:'UTC'},end:{dateTime:end.toISO({suppressMilliseconds:true}),timeZone:'UTC'},showAs:'busy',categories:['BookingCal'],transactionId:randomUUID(),attendees:[{emailAddress:{address:email,name},type:'required'}]};
     if(meetingMethod==='zoom'){eventPayload.location={displayName:'Zoom',locationUri:zoomUrl};}
     if(meetingMethod==='teams'){eventPayload.isOnlineMeeting=true;eventPayload.onlineMeetingProvider='teamsForBusiness';}
     const created=await graphFetch<any>(`/users/${encodeURIComponent(calendarEmail())}/events`,{method:'POST',headers:{Prefer:'outlook.timezone="UTC"'},body:JSON.stringify(eventPayload)});
+    const persisted=parseBookingMeta(created?.body?.content||'');
+    if(persisted?.manageToken!==manageToken||persisted.manageUrl!==manageUrl)throw new Error('Microsoft calendar event did not preserve booking management metadata');
     const meetingUrl=meetingMethod==='zoom'?zoomUrl:(created?.onlineMeeting?.joinUrl||teamsFallback);
     const when=prettyDate(selected.startUtc,viewerTimezone);
     const confirmHtml=`<p>Hi ${esc(name)},</p><p>Your meeting with Niki is booked.</p><p><strong>${esc(when)}</strong><br>${duration} minutes · ${meetingMethod==='zoom'?'Zoom':'Microsoft Teams'}</p><p><a href="${esc(meetingUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px">Join meeting</a></p><p>If your plans change, you can <a href="${esc(manageUrl)}">reschedule or cancel here</a>.</p><p>You will also receive a calendar invitation. Looking forward to seeing you.</p>`;
