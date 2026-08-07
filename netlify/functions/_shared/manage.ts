@@ -32,7 +32,7 @@ export function parseBookingMeta(html:string):BookingMeta|null{
 
 function fallbackMeta(event:any, token:string):BookingMeta|null{
   const categories=Array.isArray(event.categories)?event.categories:[];
-  const slug=String(categories.find((c:string)=>c.startsWith(SLUG_PREFIX))||'').slice(SLUG_PREFIX.length)||'niki';
+  const slug=String(categories.find((c:string)=>c.startsWith(SLUG_PREFIX))||'').slice(SLUG_PREFIX.length)||'bookniki';
   const attendee=Array.isArray(event.attendees)?event.attendees[0]?.emailAddress:null;
   const start=DateTime.fromISO(event.start?.dateTime||'',{zone:event.start?.timeZone||'UTC'}).toUTC();
   const end=DateTime.fromISO(event.end?.dateTime||'',{zone:event.end?.timeZone||'UTC'}).toUTC();
@@ -41,7 +41,7 @@ function fallbackMeta(event:any, token:string):BookingMeta|null{
   const dash=subject.indexOf(' — ');
   const purpose=dash>=0?subject.slice(0,dash):subject||'Meeting';
   const name=attendee.name||(dash>=0?subject.slice(dash+3):'Guest');
-  const meetingMethod:eventualMeetingMethod = event.onlineMeeting?.joinUrl?'teams':'zoom';
+  const meetingMethod:'zoom'|'teams'=event.onlineMeeting?.joinUrl?'teams':'zoom';
   return {
     customerName:name,
     customerEmail:attendee.address,
@@ -54,7 +54,9 @@ function fallbackMeta(event:any, token:string):BookingMeta|null{
   };
 }
 
-type eventualMeetingMethod='zoom'|'teams';
+function bodyContainsToken(html:string,token:string){
+  return html.includes(`/manage/${token}`)||html.includes(encodeURIComponent(`/manage/${token}`));
+}
 
 export async function findManagedEvent(token:string){
   if(!token||token.length<20)return null;
@@ -66,10 +68,11 @@ export async function findManagedEvent(token:string){
     for(const event of data.value||[]){
       const categories=Array.isArray(event.categories)?event.categories:[];
       if(!categories.includes('BookingCal'))continue;
+      const html=String(event.body?.content||'');
       const categoryToken=String(categories.find((c:string)=>c.startsWith(TOKEN_PREFIX))||'').slice(TOKEN_PREFIX.length);
-      const parsed=parseBookingMeta(event.body?.content||'');
+      const parsed=parseBookingMeta(html);
       if(parsed?.manageToken===token)return {event,meta:parsed};
-      if(categoryToken===token){
+      if(categoryToken===token||bodyContainsToken(html,token)){
         const meta=parsed||fallbackMeta(event,token);
         if(meta)return {event,meta};
       }
