@@ -11,8 +11,13 @@ export type BookingMeta={
   purpose:string;
   templateSlug:string;
   manageToken:string;
+  manageUrl?:string;
   duration:number;
 };
+
+export function encodeBookingMeta(meta:BookingMeta){
+  return Buffer.from(JSON.stringify(meta)).toString('base64url');
+}
 
 export function parseBookingMeta(html:string):BookingMeta|null{
   try{
